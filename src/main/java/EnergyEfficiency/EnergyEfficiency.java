@@ -182,7 +182,7 @@ public class EnergyEfficiency {
         DataNormalization normalizer = new NormalizerMinMaxScaler();
         normalizer.fit(trainSet);
         normalizer.transform(trainSet);
-        normalizer.transform(trainSet);
+        normalizer.transform(testSet);
 
         //====== Your code block ends here===========
 

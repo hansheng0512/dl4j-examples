@@ -1,4 +1,4 @@
-package ai.certifai.mockexam;
+package LifeExpectancy;
 
 /*
  * Before you start, you should:
@@ -23,6 +23,48 @@ package ai.certifai.mockexam;
  */
 
 
+import org.datavec.api.records.reader.RecordReader;
+import org.datavec.api.records.reader.impl.collection.CollectionRecordReader;
+import org.datavec.api.records.reader.impl.csv.CSVRecordReader;
+import org.datavec.api.split.FileSplit;
+import org.datavec.api.split.InputSplit;
+import org.datavec.api.transform.TransformProcess;
+import org.datavec.api.transform.filter.FilterInvalidValues;
+import org.datavec.api.writable.Writable;
+import org.datavec.local.transforms.LocalTransformExecutor;
+import org.deeplearning4j.datasets.datavec.RecordReaderDataSetIterator;
+import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
+import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
+import org.deeplearning4j.nn.conf.layers.DenseLayer;
+import org.deeplearning4j.nn.conf.layers.OutputLayer;
+import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
+import org.deeplearning4j.nn.weights.WeightInit;
+import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
+import org.deeplearning4j.ui.api.UIServer;
+import org.deeplearning4j.ui.model.stats.StatsListener;
+import org.deeplearning4j.ui.model.storage.InMemoryStatsStorage;
+import org.nd4j.common.io.ClassPathResource;
+import org.datavec.api.transform.schema.Schema;
+import org.nd4j.evaluation.classification.Evaluation;
+import org.nd4j.linalg.activations.Activation;
+import org.nd4j.linalg.dataset.DataSet;
+import org.nd4j.linalg.dataset.SplitTestAndTrain;
+import org.nd4j.linalg.dataset.ViewIterator;
+import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
+import org.nd4j.linalg.dataset.api.iterator.KFoldIterator;
+import org.nd4j.linalg.dataset.api.preprocessor.DataNormalization;
+import org.nd4j.linalg.dataset.api.preprocessor.NormalizerMinMaxScaler;
+import org.nd4j.linalg.learning.config.Adam;
+import org.nd4j.linalg.lossfunctions.LossFunctions;
+
+import javax.xml.crypto.Data;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 public class LifeExpectancy {
 
     private static int seed = 12345;
@@ -30,12 +72,17 @@ public class LifeExpectancy {
     private static int epoch = 10;
     private static double trainPerc = 0.7;
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
 
         /*
          * Step 1: Read the CSV file in a RecordReader
          */
         //====== Your code block starts here===========
+
+        File dataFile = new ClassPathResource("life_exp.csv").getFile();
+        RecordReader rr = new CSVRecordReader(1, ',');
+        FileSplit filesplit = new FileSplit(dataFile);
+        rr.initialize(filesplit);
 
         //====== Your code block ends here===========
 
@@ -66,7 +113,8 @@ public class LifeExpectancy {
         TransformProcess tp = new TransformProcess.Builder(schema)
                 .removeColumns("country")
                 //====== Your code block starts here===========
-
+                .stringToCategorical("status", Arrays.asList("Developing", "Developed"))
+                .categoricalToOneHot("status")
                 //====== Your code block ends here===========
                 .filter(new FilterInvalidValues())
                 .build();
@@ -78,12 +126,18 @@ public class LifeExpectancy {
          * */
         //====== Your code block starts here===========
 
+        while(rr.hasNext()){
+            original.add(rr.next());
+        }
+
         //====== Your code block ends here===========
 
         /*
          * Step 4: Execute transform process
          * */
         //====== Your code block starts here===========
+
+        List<List<Writable>> transformed = LocalTransformExecutor.execute(original, tp);
 
         //====== Your code block ends here===========
 
@@ -103,6 +157,10 @@ public class LifeExpectancy {
          * */
         //====== Your code block starts here===========
 
+        DataSetIterator iter = new RecordReaderDataSetIterator(crr,transformed.size(),3,3,true);
+        DataSet dataset = iter.next();
+        dataset.shuffle(seed);
+
         //====== Your code block ends here===========
 
         /*
@@ -112,6 +170,10 @@ public class LifeExpectancy {
          * */
         //====== Your code block starts here===========
 
+        SplitTestAndTrain TrainTest = dataset.splitTestAndTrain(trainPerc);
+        DataSet train  =TrainTest.getTrain();
+        DataSet test  =TrainTest.getTest();
+
         //====== Your code block ends here===========
 
         /*
@@ -119,6 +181,8 @@ public class LifeExpectancy {
          * hint: experiment with both types of scaling method
          * */
         //====== Your code block starts here===========
+
+        DataNormalization scaler = new NormalizerMinMaxScaler(0,1);
 
         //====== Your code block ends here===========
 
@@ -128,6 +192,8 @@ public class LifeExpectancy {
          *
          * */
         //====== Your code block starts here===========
+
+        scaler.fit(test);
 
         //====== Your code block ends here===========
 
@@ -140,6 +206,8 @@ public class LifeExpectancy {
          * */
         //====== Your code block starts here===========
 
+        KFoldIterator kfloat = new KFoldIterator(5,test);
+
         //====== Your code block ends here===========
 
         /*
@@ -147,6 +215,9 @@ public class LifeExpectancy {
          * Keep in mind to use the following input parameters provided: seed and learning rate
          * */
         //====== Your code block starts here===========
+
+        ViewIterator trainIter = new ViewIterator(train,128);
+        MultiLayerConfiguration config = getConfig(seed,lr,trainIter.inputColumns(),2);
 
         //====== Your code block ends here===========
 
@@ -171,6 +242,9 @@ public class LifeExpectancy {
          * */
         //====== Your code block starts here===========
 
+        Evaluation evalTrain = model.evaluate(trainIter);
+        Evaluation evalTest = model.evaluate(kfloat);
+
         //====== Your code block ends here===========
         System.out.println("Train & Validation evaluation\n"+evalTrain.stats());
         System.out.println("Test evaluation\n"+evalTest.stats());
@@ -188,6 +262,26 @@ public class LifeExpectancy {
           4. use MSE as loss function
          */
         //====== Your code block starts here===========
+
+        MultiLayerConfiguration config = new NeuralNetConfiguration.Builder()
+                .seed(seedNum)
+                .updater(new Adam(learningRate))
+                .weightInit(WeightInit.XAVIER)
+                .list()
+                .layer(0, new DenseLayer.Builder()
+                        .nIn(nFeatures)
+                        .activation(Activation.RELU)
+                        .nOut(100)
+                        .build()
+                )
+                .layer(1,new OutputLayer.Builder(LossFunctions.LossFunction.MSE)
+                        .activation(Activation.IDENTITY)
+                        .nOut(1)
+                        .build()
+                )
+                .build();
+
+        return config;
 
         //====== Your code block ends here===========
     }

@@ -4,8 +4,9 @@ import org.datavec.image.transform.*;
 import org.deeplearning4j.core.storage.StatsStorage;
 import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
-import org.deeplearning4j.nn.conf.Updater;
+import org.deeplearning4j.nn.conf.inputs.InputType;
 import org.deeplearning4j.nn.conf.layers.ConvolutionLayer;
+import org.deeplearning4j.nn.conf.layers.DenseLayer;
 import org.deeplearning4j.nn.conf.layers.OutputLayer;
 import org.deeplearning4j.nn.conf.layers.SubsamplingLayer;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
@@ -20,20 +21,6 @@ import org.nd4j.linalg.activations.Activation;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
 import org.nd4j.linalg.learning.config.Adam;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
-import org.slf4j.Logger;
-
-import org.datavec.api.io.filters.BalancedPathFilter;
-import org.datavec.api.io.labels.ParentPathLabelGenerator;
-import org.datavec.api.split.FileSplit;
-import org.datavec.api.split.InputSplit;
-import org.datavec.image.loader.BaseImageLoader;
-import org.datavec.image.recordreader.ImageRecordReader;
-import org.datavec.image.transform.*;
-import org.deeplearning4j.datasets.datavec.RecordReaderDataSetIterator;
-import org.nd4j.linalg.dataset.DataSet;
-import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
-import org.nd4j.common.io.ClassPathResource;
-import org.nd4j.common.primitives.Pair;
 
 import java.io.File;
 import java.util.Arrays;
@@ -81,7 +68,6 @@ import java.util.Random;
 
 public class HorseBreedClassifier {
 
-    private static final Logger log = org.slf4j.LoggerFactory.getLogger(HorseBreedClassifier.class);
     private static final int height = 64;
     private static final int width = 64;
     private static final int nChannel = 3;
@@ -137,17 +123,23 @@ public class HorseBreedClassifier {
                         .stride(2,2)
                         .build()
                 )
-                .layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
-                        .nOut(4)
+                .layer(2, new DenseLayer.Builder()
+                        .activation(Activation.RELU)
+                        .nOut(10)
                         .build()
                 )
-
+                .layer(3, new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD)
+                        .activation(Activation.SOFTMAX)
+                        .nOut(nOutput)
+                        .build()
+                )
+                .setInputType(InputType.convolutional(height,width,nChannel))
                 .build();
 
         MultiLayerNetwork model = new MultiLayerNetwork(config);
         model.init();
 
-        log.info("**************************************** MODEL SUMMARY ****************************************");
+        System.out.println("**************************************** MODEL SUMMARY ****************************************");;
         System.out.println(model.summary());
 
         // Train your model and set listeners
@@ -157,12 +149,12 @@ public class HorseBreedClassifier {
         server.attach(storage);
         model.setListeners(new ScoreIterationListener(1), new StatsListener(storage));
 
-        for (int i=0; i<100; i++){
+        for (int i=0; i<nEpoch; i++){
             trainIter.reset();
             model.fit(trainIter);
         }
 
-        log.info("**************************************** MODEL EVALUATION ****************************************");
+        System.out.println("**************************************** MODEL EVALUATION ****************************************");
 
         // Perform evaluation on both train and test set
 

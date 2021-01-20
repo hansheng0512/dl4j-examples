@@ -81,10 +81,16 @@ public class HorseBreedIterator {
         ImageRecordReader trainRR = new ImageRecordReader(height, width, nChannel, labelMaker);
         ImageRecordReader testRR = new ImageRecordReader(height, width, nChannel, labelMaker);
 
+        trainRR.initialize(trainData,imageTransform);
+        trainRR.initialize(testData,imageTransform);
+
         DataSetIterator trainIter = new RecordReaderDataSetIterator(trainRR, batchSize, 1, trainRR.numLabels());
         DataSetIterator testIter = new RecordReaderDataSetIterator(testRR, batchSize, 1, testRR.numLabels());
 
         DataNormalization scalar = new ImagePreProcessingScaler();
+
+        trainIter.setPreProcessor(scalar);
+        testIter.setPreProcessor(scalar);
 
         return null;
     }

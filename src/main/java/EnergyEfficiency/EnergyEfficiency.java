@@ -1,6 +1,4 @@
-package ai.certifai.mockexam;
-
-
+package EnergyEfficiency;
 
 /*
  * Before you start, you should:
@@ -35,8 +33,48 @@ package ai.certifai.mockexam;
  * Y2: Cooling Load
  */
 
+import org.datavec.api.records.reader.RecordReader;
+import org.datavec.api.records.reader.impl.collection.CollectionRecordReader;
+import org.datavec.api.records.reader.impl.csv.CSVRecordReader;
+import org.datavec.api.split.FileSplit;
+import org.datavec.api.transform.TransformProcess;
+import org.datavec.api.transform.filter.FilterInvalidValues;
+import org.datavec.api.transform.schema.Schema;
+import org.datavec.api.writable.Writable;
+import org.datavec.local.transforms.LocalTransformExecutor;
+import org.deeplearning4j.core.storage.StatsStorage;
+import org.deeplearning4j.datasets.datavec.RecordReaderDataSetIterator;
+import org.deeplearning4j.earlystopping.EarlyStoppingConfiguration;
+import org.deeplearning4j.earlystopping.EarlyStoppingResult;
+import org.deeplearning4j.earlystopping.scorecalc.DataSetLossCalculator;
+import org.deeplearning4j.earlystopping.termination.MaxEpochsTerminationCondition;
+import org.deeplearning4j.earlystopping.trainer.EarlyStoppingTrainer;
+import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
+import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
+import org.deeplearning4j.nn.conf.layers.DenseLayer;
+import org.deeplearning4j.nn.conf.layers.OutputLayer;
+import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
+import org.deeplearning4j.nn.weights.WeightInit;
+import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
+import org.deeplearning4j.ui.api.UIServer;
+import org.deeplearning4j.ui.model.stats.StatsListener;
+import org.deeplearning4j.ui.model.storage.InMemoryStatsStorage;
+import org.nd4j.common.io.ClassPathResource;
+import org.nd4j.evaluation.classification.Evaluation;
+import org.nd4j.linalg.activations.Activation;
+import org.nd4j.linalg.dataset.DataSet;
+import org.nd4j.linalg.dataset.SplitTestAndTrain;
+import org.nd4j.linalg.dataset.ViewIterator;
+import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
+import org.nd4j.linalg.dataset.api.preprocessor.DataNormalization;
+import org.nd4j.linalg.dataset.api.preprocessor.NormalizerMinMaxScaler;
+import org.nd4j.linalg.learning.config.Adam;
+import org.nd4j.linalg.lossfunctions.LossFunctions;
+
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class EnergyEfficiency {
 
@@ -54,7 +92,10 @@ public class EnergyEfficiency {
          */
         //====== Your code block starts here===========
 
-        File dataFile = new ClassPathResource("Energy/ENB2012_data.csv")
+        File dataFile = new ClassPathResource("ENB2012_data.csv").getFile();
+        RecordReader rr = new CSVRecordReader(1,',');
+        FileSplit filesplit = new FileSplit(dataFile);
+        rr.initialize(filesplit);
 
         //====== Your code block ends here===========
 
@@ -74,6 +115,11 @@ public class EnergyEfficiency {
          */
         //====== Your code block starts here===========
 
+        TransformProcess tp = new TransformProcess.Builder(schema)
+                .removeColumns("emptyCol1","emptyCol2")
+                .filter(new FilterInvalidValues())
+                .build();
+
         //====== Your code block ends here===========
 
         List<List<Writable>> data = new ArrayList<>();
@@ -82,6 +128,11 @@ public class EnergyEfficiency {
          * Step 3: Put each instances into the List<List<Writable>>
          * */
         //====== Your code block starts here===========
+
+        while (rr.hasNext()){
+            List<Writable> Data = rr.next();
+            data.add(Data);
+        }
 
         //====== Your code block ends here===========
 
@@ -106,12 +157,20 @@ public class EnergyEfficiency {
          */
         //====== Your code block starts here===========
 
+        DataSetIterator iter = new RecordReaderDataSetIterator(crr,transformed.size(),8,9,true);
+        DataSet dataset = iter.next();
+        dataset.shuffle(seed);
+
         //====== Your code block ends here===========
 
         /*
          * Step 5: Do train and test splitting
          */
         //====== Your code block starts here===========
+
+        SplitTestAndTrain TestnTrain = dataset.splitTestAndTrain(trainFraction);
+        DataSet trainSet = TestnTrain.getTrain();
+        DataSet testSet = TestnTrain.getTest();
 
         //====== Your code block ends here===========
 
@@ -120,9 +179,14 @@ public class EnergyEfficiency {
          */
         //====== Your code block starts here===========
 
+        DataNormalization normalizer = new NormalizerMinMaxScaler();
+        normalizer.fit(trainSet);
+        normalizer.transform(trainSet);
+        normalizer.transform(trainSet);
+
         //====== Your code block ends here===========
 
-        ViewIterator trainIter = new ViewIterator(trainSet, batchSize);
+        ViewIterator trainIter = new ViewIterator(trainSet,batchSize);
         ViewIterator testIter = new ViewIterator(testSet, batchSize);
 
         MultiLayerConfiguration config = new NeuralNetConfiguration.Builder()
@@ -137,7 +201,7 @@ public class EnergyEfficiency {
                         .build())
                 .layer(new OutputLayer.Builder(LossFunctions.LossFunction.MSE)
                         .nOut(2)
-                        .activation(Activation.IDENTITY)
+                        .activation(Activation.SIGMOID)
                         .build())
                 .build();
 
@@ -151,12 +215,43 @@ public class EnergyEfficiency {
          */
         //====== Your code block starts here===========
 
-        //====== Your code block ends here===========
+
+        EarlyStoppingConfiguration esConfig = new EarlyStoppingConfiguration.Builder()
+                .epochTerminationConditions(new MaxEpochsTerminationCondition(200))
+                .scoreCalculator(new DataSetLossCalculator(testIter,true))
+                .evaluateEveryNEpochs(1)
+                .build();
 
         /*
          * Step 8: Perform evaluation for both train and test set using the early stopping model
          */
-        //====== Your code block starts here===========
+
+        EarlyStoppingTrainer trainer = new EarlyStoppingTrainer(esConfig,config,trainIter);
+
+        EarlyStoppingResult result = trainer.fit();
+
+        MultiLayerNetwork model = new MultiLayerNetwork(config);
+
+        //Set model listeners
+        model.init();
+        UIServer server = UIServer.getInstance();
+        StatsStorage storage = new InMemoryStatsStorage();
+        server.attach(storage);
+        model.setListeners(new ScoreIterationListener(1), new StatsListener(storage));
+
+        //Set the number of epoch using the best results from the first Early Stopping training to retrain the model
+        //result.getBestModelEpoch() - the optimal epoch number
+        System.out.println("Training model ...");
+        System.out.println("Best Epochs is " + result.getBestModelEpoch());
+
+        for(int i = 0; i < result.getBestModelEpoch(); i++) {
+            model.fit(trainIter);
+            Evaluation eval = model.evaluate(testIter);
+            System.out.println("EPOCH: " + i + " Accuracy: " + eval.accuracy());
+        }
+
+        Evaluation evalTrain = model.evaluate(trainIter);
+        Evaluation evalTest = model.evaluate(trainIter);
 
         //====== Your code block ends here===========
 

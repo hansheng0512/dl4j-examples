@@ -78,21 +78,20 @@ public class HorseBreedIterator {
         // 3. perform normalization with ImagePreProcessingScaler, scaler
         // Note: remember you also want to do some image augmentations
 
-        ImageRecordReader trainRR = new ImageRecordReader(height, width, nChannel, labelMaker);
-        ImageRecordReader testRR = new ImageRecordReader(height, width, nChannel, labelMaker);
+        if (train == true){
+            rr.initialize(trainData,imageTransform);
+        }
+        else{
+            rr.initialize(testData);
+        }
 
-        trainRR.initialize(trainData,imageTransform);
-        trainRR.initialize(testData,imageTransform);
-
-        DataSetIterator trainIter = new RecordReaderDataSetIterator(trainRR, batchSize, 1, trainRR.numLabels());
-        DataSetIterator testIter = new RecordReaderDataSetIterator(testRR, batchSize, 1, testRR.numLabels());
+        DataSetIterator iter = new RecordReaderDataSetIterator(rr, batchSize, 1, rr.numLabels());
 
         DataNormalization scalar = new ImagePreProcessingScaler();
 
-        trainIter.setPreProcessor(scalar);
-        testIter.setPreProcessor(scalar);
+        iter.setPreProcessor(scalar);
 
-        return null;
+        return iter;
     }
 
     public static DataSetIterator getTrain(ImageTransform transform, int batchsize) throws IOException {

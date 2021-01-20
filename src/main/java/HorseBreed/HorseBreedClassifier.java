@@ -112,7 +112,7 @@ public class HorseBreedClassifier {
                 new Pair<>(randomCrop,1.0)
         );
 
-        ImageTransform transform = new PipelineImageTransform(pipeline, false);
+        ImageTransform transform = new PipelineImageTransform(pipeline, shuffle);
 
         DataSetIterator trainIter = HorseBreedIterator.getTrain(transform,batchSize);
         DataSetIterator testIter = HorseBreedIterator.getTest(1);
